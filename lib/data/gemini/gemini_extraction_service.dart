@@ -27,7 +27,7 @@ class GeminiExtractionService {
   }) : _client = client ?? http.Client(),
        _validator = validator ?? const ReceiptValidator();
 
-  static const String model = 'gemini-2.5-flash';
+  static const String model = 'gemini-3.6-flash';
   static const Duration _requestTimeout = Duration(seconds: 60);
 
   final http.Client _client;

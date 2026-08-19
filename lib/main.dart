@@ -1,8 +1,10 @@
-import 'package:drift/drift.dart' show Value;
-import 'package:flutter/material.dart';
+import 'dart:typed_data';
 
-import 'data/database/app_database.dart';
-import 'data/receipt_repository.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+
+import 'data/gemini/gemini_extraction_service.dart';
+import 'domain/extraction_result.dart';
 
 void main() {
   runApp(const MyApp());
@@ -16,126 +18,112 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Extractly',
       theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true),
-      home: const DbTestScreen(),
+      home: const ExtractionTestScreen(),
     );
   }
 }
 
-/// TEMPORARY: proves the database + repository work end to end.
-/// Replaced by the real Home screen in Phase 4.
-class DbTestScreen extends StatefulWidget {
-  const DbTestScreen({super.key});
+/// TEMPORARY: runs extraction on a bundled sample image so we can see the
+/// Gemini pipeline work end to end. Replaced by the real capture flow in Phase 4.
+class ExtractionTestScreen extends StatefulWidget {
+  const ExtractionTestScreen({super.key});
 
   @override
-  State<DbTestScreen> createState() => _DbTestScreenState();
+  State<ExtractionTestScreen> createState() => _ExtractionTestScreenState();
 }
 
-class _DbTestScreenState extends State<DbTestScreen> {
-  late final AppDatabase _db;
-  late final ReceiptRepository _repo;
+class _ExtractionTestScreenState extends State<ExtractionTestScreen> {
+  final _service = GeminiExtractionService();
 
-  List<Receipt> _receipts = [];
-  String _status = 'Ready';
-
-  @override
-  void initState() {
-    super.initState();
-    _db = AppDatabase();
-    _repo = ReceiptRepository(_db);
-    _load();
-  }
+  bool _loading = false;
+  String _output = 'Tap "Extract sample" to run the Gemini pipeline.';
 
   @override
   void dispose() {
-    _db.close();
+    _service.dispose();
     super.dispose();
   }
 
-  Future<void> _load() async {
-    final rows = await _repo.getAllReceipts();
-    setState(() => _receipts = rows);
-  }
+  Future<void> _runExtraction() async {
+    setState(() {
+      _loading = true;
+      _output = 'Loading image and calling Gemini...';
+    });
 
-  Future<void> _addSample() async {
-    final id = await _repo.saveReceipt(
-      receipt: ReceiptsCompanion.insert(
-        merchantName: const Value('Sample Cafe'),
-        currency: const Value('LKR'),
-        date: Value(DateTime.now().toIso8601String().substring(0, 10)),
-        total: const Value(1450.00),
-      ),
-      items: [
-        ReceiptItemsCompanion.insert(
-          receiptId: 0, // overwritten inside the transaction
-          description: 'Cappuccino',
-          quantity: const Value(2),
-          unitPrice: const Value(650),
-          total: const Value(1300),
-        ),
-        ReceiptItemsCompanion.insert(
-          receiptId: 0,
-          description: 'Service charge',
-          total: const Value(150),
-        ),
-      ],
-    );
-    setState(() => _status = 'Saved receipt #$id');
-    await _load();
-  }
+    try {
+      final data = await rootBundle.load('assets/sample_receipt.jpg');
+      final bytes = data.buffer.asUint8List();
 
-  Future<void> _clear() async {
-    for (final r in _receipts) {
-      await _repo.deleteReceipt(r.id);
+      final result = await _service.extract(bytes);
+
+      setState(() => _output = _describe(result));
+    } catch (e) {
+      setState(() => _output = 'Error loading asset: $e');
+    } finally {
+      setState(() => _loading = false);
     }
-    setState(() => _status = 'Cleared all');
-    await _load();
+  }
+
+  String _describe(ExtractionResult result) {
+    switch (result) {
+      case ExtractionSuccess(
+        :final receipt,
+        :final needsReview,
+        :final reviewReasons,
+      ):
+        final buffer = StringBuffer()
+          ..writeln('✅ EXTRACTED')
+          ..writeln('Merchant: ${receipt.merchantName ?? "—"}')
+          ..writeln('Date: ${receipt.date ?? "—"}')
+          ..writeln('Currency: ${receipt.currency ?? "—"}')
+          ..writeln('Total: ${receipt.total?.toStringAsFixed(2) ?? "—"}')
+          ..writeln('Items (${receipt.items.length}):');
+        for (final item in receipt.items) {
+          buffer.writeln(
+            '  • ${item.description} '
+            '${item.total?.toStringAsFixed(2) ?? ""}',
+          );
+        }
+        buffer.writeln('');
+        buffer.writeln(
+          needsReview ? '⚠️ Needs review:' : '✔ Passed validation',
+        );
+        for (final reason in reviewReasons) {
+          buffer.writeln('  - $reason');
+        }
+        return buffer.toString();
+
+      case ExtractionNotAReceipt():
+        return '🚫 Not a receipt.';
+
+      case ExtractionFailure(:final message):
+        return '❌ Failed: $message';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Extractly — DB test')),
-      body: Column(
-        children: [
-          Padding(padding: const EdgeInsets.all(12), child: Text(_status)),
-          Expanded(
-            child: _receipts.isEmpty
-                ? const Center(
-                    child: Text('No receipts yet. Tap + to add one.'),
-                  )
-                : ListView.builder(
-                    itemCount: _receipts.length,
-                    itemBuilder: (context, i) {
-                      final r = _receipts[i];
-                      return ListTile(
-                        title: Text(r.merchantName ?? '(no name)'),
-                        subtitle: Text('${r.date ?? "?"} · #${r.id}'),
-                        trailing: Text(
-                          '${r.currency ?? ""} ${r.total?.toStringAsFixed(2) ?? "-"}',
-                        ),
-                      );
-                    },
-                  ),
+      appBar: AppBar(title: const Text('Extractly — extraction test')),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          child: Text(
+            _output,
+            style: const TextStyle(fontFamily: 'monospace', height: 1.4),
           ),
-        ],
+        ),
       ),
-      floatingActionButton: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FloatingActionButton.extended(
-            heroTag: 'clear',
-            onPressed: _clear,
-            label: const Text('Clear'),
-            icon: const Icon(Icons.delete_outline),
-          ),
-          const SizedBox(width: 12),
-          FloatingActionButton.extended(
-            heroTag: 'add',
-            onPressed: _addSample,
-            label: const Text('Add sample'),
-            icon: const Icon(Icons.add),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _loading ? null : _runExtraction,
+        icon: _loading
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.document_scanner),
+        label: Text(_loading ? 'Working...' : 'Extract sample'),
       ),
     );
   }
