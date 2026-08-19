@@ -47,6 +47,14 @@ class ReceiptRepository {
     )..orderBy([(t) => OrderingTerm.desc(t.createdAt)])).get();
   }
 
+  /// A live stream of all receipts, newest first. Emits a new list whenever
+  /// the underlying table changes — this is what makes the UI auto-update.
+  Stream<List<Receipt>> watchAllReceipts() {
+    return (_db.select(
+      _db.receipts,
+    )..orderBy([(t) => OrderingTerm.desc(t.createdAt)])).watch();
+  }
+
   /// A single receipt with its line items, or null if it doesn't exist.
   Future<ReceiptWithItems?> getReceiptById(int id) async {
     final receipt = await (_db.select(
