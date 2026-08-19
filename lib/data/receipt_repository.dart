@@ -1,3 +1,5 @@
+import '../domain/parsed_receipt.dart';
+
 import 'package:drift/drift.dart';
 
 import 'database/app_database.dart';
@@ -73,5 +75,41 @@ class ReceiptRepository {
   /// Deletes a receipt. Its line items go too, via the cascade FK.
   Future<void> deleteReceipt(int id) {
     return (_db.delete(_db.receipts)..where((t) => t.id.equals(id))).go();
+  }
+
+  /// Saves an extracted receipt (parsed + optionally edited) to the database.
+  Future<int> saveParsed(
+    ParsedReceipt parsed, {
+    bool needsReview = false,
+    String? imagePath,
+  }) {
+    return saveReceipt(
+      receipt: ReceiptsCompanion.insert(
+        merchantName: Value(parsed.merchantName),
+        merchantAddress: Value(parsed.merchantAddress),
+        merchantPhone: Value(parsed.merchantPhone),
+        currency: Value(parsed.currency),
+        date: Value(parsed.date),
+        time: Value(parsed.time),
+        subtotal: Value(parsed.subtotal),
+        tax: Value(parsed.tax),
+        tip: Value(parsed.tip),
+        total: Value(parsed.total),
+        paymentMethod: Value(parsed.paymentMethod),
+        needsReview: Value(needsReview),
+        imagePath: Value(imagePath),
+      ),
+      items: parsed.items
+          .map(
+            (item) => ReceiptItemsCompanion.insert(
+              receiptId: 0, // set inside the transaction
+              description: item.description,
+              quantity: Value(item.quantity),
+              unitPrice: Value(item.unitPrice),
+              total: Value(item.total),
+            ),
+          )
+          .toList(),
+    );
   }
 }

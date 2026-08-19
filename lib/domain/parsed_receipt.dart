@@ -84,4 +84,28 @@ class ParsedReceipt {
           .toList(),
     );
   }
+
+  /// A copy with fields replaced — used by the review screen's editing.
+  ParsedReceipt copyWith({
+    String? merchantName,
+    String? currency,
+    String? date,
+    double? total,
+    List<ParsedLineItem>? items,
+  }) {
+    return ParsedReceipt(
+      merchantName: merchantName ?? this.merchantName,
+      merchantAddress: merchantAddress,
+      merchantPhone: merchantPhone,
+      currency: currency ?? this.currency,
+      date: date ?? this.date,
+      time: time,
+      subtotal: subtotal,
+      tax: tax,
+      tip: tip,
+      total: total ?? this.total,
+      paymentMethod: paymentMethod,
+      items: items ?? this.items,
+    );
+  }
 }
