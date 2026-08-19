@@ -1,3 +1,4 @@
+import 'detail_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -154,7 +155,13 @@ class _ReceiptTile extends StatelessWidget {
             ),
         ],
       ),
-      onTap: () {}, // detail screen in Part C
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => DetailScreen(receiptId: receipt.id),
+          ),
+        );
+      },
     );
   }
 }
