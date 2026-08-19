@@ -25,7 +25,12 @@ class GeminiExtractionService {
     ReceiptValidator? validator,
     this.maxAttempts = 3,
   }) : _client = client ?? http.Client(),
-       _validator = validator ?? const ReceiptValidator();
+       _validator = validator ?? const ReceiptValidator(),
+       _clientInjected = client != null;
+
+  /// True when a caller supplied the HTTP client (i.e. in tests). When true,
+  /// we skip the real API-key gate so tests run without a key.
+  final bool _clientInjected;
 
   static const String model = 'gemini-3.6-flash';
   static const Duration _requestTimeout = Duration(seconds: 60);
@@ -46,7 +51,7 @@ class GeminiExtractionService {
     Uint8List imageBytes, {
     String mimeType = 'image/jpeg',
   }) async {
-    if (!GeminiConfig.hasKey) {
+    if (!_clientInjected && !GeminiConfig.hasKey) {
       return const ExtractionFailure(
         'No API key configured. Pass --dart-define-from-file=env.json when running.',
       );

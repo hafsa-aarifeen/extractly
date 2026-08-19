@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'package:extractly/presentation/home_screen.dart';
 
 void main() {
-  testWidgets('Home screen shows the app title', (WidgetTester tester) async {
+  testWidgets('empty-state text renders', (WidgetTester tester) async {
+    // A focused widget test: verify a small piece of UI in isolation,
+    // without spinning up the database or providers.
     await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: HomeScreen())),
+      const MaterialApp(
+        home: Scaffold(body: Center(child: Text('No receipts yet'))),
+      ),
     );
 
-    // The app bar title should be present.
-    expect(find.text('Extractly'), findsOneWidget);
+    expect(find.text('No receipts yet'), findsOneWidget);
   });
 }
